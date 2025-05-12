@@ -6,19 +6,10 @@
  * @license Apache-2.0
  */
 
-import "babel-polyfill";
-import Chef from "./Chef.js";
-import OperationConfig from "./config/MetaConfig.js";
-import OpModules from "./config/modules/Default.js";
-
-// Add ">" to the start of all log messages in the Chef Worker
+import Chef from "./Chef.mjs";
+import OperationConfig from "./config/OperationConfig.json" assert {type: "json"};
+import OpModules from "./config/modules/OpModules.mjs";
 import loglevelMessagePrefix from "loglevel-message-prefix";
-
-loglevelMessagePrefix(log, {
-    prefixes: [],
-    staticPrefixes: [">"],
-    prefixFormat: "%p"
-});
 
 
 // Set up Chef instance
@@ -26,6 +17,8 @@ self.chef = new Chef();
 
 self.OpModules = OpModules;
 self.OperationConfig = OperationConfig;
+self.inputNum = -1;
+
 
 // Tell the app that the worker has loaded and is ready to operate
 self.postMessage({
@@ -36,6 +29,9 @@ self.postMessage({
 /**
  * Respond to message from parent thread.
  *
+ * inputNum is optional and only used for baking multiple inputs.
+ * Defaults to -1 when one isn't sent with the bake message.
+ *
  * Messages should have the following format:
  * {
  *     action: "bake" | "silentBake",
@@ -44,14 +40,15 @@ self.postMessage({
  *         recipeConfig: {[Object]},
  *         options: {Object},
  *         progress: {number},
- *         step: {boolean}
- *     } | undefined
+ *         step: {boolean},
+ *         [inputNum=-1]: {number}
+ *     }
  * }
  */
 self.addEventListener("message", function(e) {
     // Handle message
     const r = e.data;
-    log.debug("ChefWorker receiving command '" + r.action + "'");
+    log.debug(`Receiving command '${r.action}'`);
 
     switch (r.action) {
         case "bake":
@@ -59,6 +56,12 @@ self.addEventListener("message", function(e) {
             break;
         case "silentBake":
             silentBake(r.data);
+            break;
+        case "getDishAs":
+            getDishAs(r.data);
+            break;
+        case "getDishTitle":
+            getDishTitle(r.data);
             break;
         case "docURL":
             // Used to set the URL of the current document so that scripts can be
@@ -75,6 +78,12 @@ self.addEventListener("message", function(e) {
         case "setLogLevel":
             log.setLevel(r.data, false);
             break;
+        case "setLogPrefix":
+            loglevelMessagePrefix(log, {
+                prefixes: [],
+                staticPrefixes: [r.data]
+            });
+            break;
         default:
             break;
     }
@@ -88,27 +97,39 @@ self.addEventListener("message", function(e) {
  */
 async function bake(data) {
     // Ensure the relevant modules are loaded
-    loadRequiredModules(data.recipeConfig);
-
+    self.loadRequiredModules(data.recipeConfig);
     try {
+        self.inputNum = data.inputNum === undefined ? -1 : data.inputNum;
         const response = await self.chef.bake(
             data.input,          // The user's input
             data.recipeConfig,   // The configuration of the recipe
-            data.options,        // Options set by the user
-            data.progress,       // The current position in the recipe
-            data.step            // Whether or not to take one step or execute the whole recipe
+            data.options         // Options set by the user
         );
+
+        const transferable = (response.dish.value instanceof ArrayBuffer) ?
+            [response.dish.value] :
+            undefined;
 
         self.postMessage({
             action: "bakeComplete",
-            data: response
-        });
+            data: Object.assign(response, {
+                id: data.id,
+                inputNum: data.inputNum,
+                bakeId: data.bakeId
+            })
+        }, transferable);
+
     } catch (err) {
         self.postMessage({
             action: "bakeError",
-            data: err
+            data: {
+                error: err.message || err,
+                id: data.id,
+                inputNum: data.inputNum
+            }
         });
     }
+    self.inputNum = -1;
 }
 
 
@@ -126,19 +147,36 @@ function silentBake(data) {
 
 
 /**
- * Checks that all required modules are loaded and loads them if not.
- *
- * @param {Object} recipeConfig
+ * Translates the dish to a given type.
  */
-function loadRequiredModules(recipeConfig) {
-    recipeConfig.forEach(op => {
-        let module = self.OperationConfig[op.op].module;
+async function getDishAs(data) {
+    const value = await self.chef.getDishAs(data.dish, data.type);
+    const transferable = (data.type === "ArrayBuffer") ? [value] : undefined;
+    self.postMessage({
+        action: "dishReturned",
+        data: {
+            value: value,
+            id: data.id
+        }
+    }, transferable);
+}
 
-        if (!OpModules.hasOwnProperty(module)) {
-            log.info("Loading module " + module);
-            self.sendStatusMessage("Loading module " + module);
-            self.importScripts(self.docURL + "/" + module + ".js");
-            self.sendStatusMessage("");
+
+/**
+ * Gets the dish title
+ *
+ * @param {object} data
+ * @param {Dish} data.dish
+ * @param {number} data.maxLength
+ * @param {number} data.id
+ */
+async function getDishTitle(data) {
+    const title = await self.chef.getDishTitle(data.dish, data.maxLength);
+    self.postMessage({
+        action: "dishReturned",
+        data: {
+            value: title,
+            id: data.id
         }
     });
 }
@@ -149,18 +187,37 @@ function loadRequiredModules(recipeConfig) {
  *
  * @param {Object[]} recipeConfig
  * @param {string} direction
- * @param {Object} pos - The position object for the highlight.
+ * @param {Object[]} pos - The position object for the highlight.
  * @param {number} pos.start - The start offset.
  * @param {number} pos.end - The end offset.
  */
-function calculateHighlights(recipeConfig, direction, pos) {
-    pos = self.chef.calculateHighlights(recipeConfig, direction, pos);
+async function calculateHighlights(recipeConfig, direction, pos) {
+    pos = await self.chef.calculateHighlights(recipeConfig, direction, pos);
 
     self.postMessage({
         action: "highlightsCalculated",
         data: pos
     });
 }
+
+
+/**
+ * Checks that all required modules are loaded and loads them if not.
+ *
+ * @param {Object} recipeConfig
+ */
+self.loadRequiredModules = function(recipeConfig) {
+    recipeConfig.forEach(op => {
+        const module = self.OperationConfig[op.op].module;
+
+        if (!(module in OpModules)) {
+            log.info(`Loading ${module} module`);
+            self.sendStatusMessage(`Loading ${module} module`);
+            self.importScripts(`${self.docURL}/modules/${module}.js`); // lgtm [js/client-side-unvalidated-url-redirection]
+            self.sendStatusMessage("");
+        }
+    });
+};
 
 
 /**
@@ -171,7 +228,28 @@ function calculateHighlights(recipeConfig, direction, pos) {
 self.sendStatusMessage = function(msg) {
     self.postMessage({
         action: "statusMessage",
-        data: msg
+        data: {
+            message: msg,
+            inputNum: self.inputNum
+        }
+    });
+};
+
+
+/**
+ * Send progress update to the app.
+ *
+ * @param {number} progress
+ * @param {number} total
+ */
+self.sendProgressMessage = function(progress, total) {
+    self.postMessage({
+        action: "progressMessage",
+        data: {
+            progress: progress,
+            total: total,
+            inputNum: self.inputNum
+        }
     });
 };
 

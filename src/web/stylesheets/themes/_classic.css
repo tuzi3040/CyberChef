@@ -8,12 +8,14 @@
 
 :root,
 :root.classic {
-    --primary-font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --primary-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, "Helvetica Neue", Arial, sans-serif;
     --primary-font-colour: #333;
     --primary-font-size: 14px;
     --primary-line-height: 20px;
 
-    --fixed-width-font-family: "Consolas", monospace;
+    --fixed-width-font-family: SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
     --fixed-width-font-colour: inherit;
     --fixed-width-font-size: inherit;
 
@@ -28,10 +30,19 @@
 
     --title-colour: #424242;
     --title-weight: bold;
+    --title-size: 16px;
     --title-background-colour: #fafafa;
 
     --banner-font-colour: #468847;
     --banner-bg-colour: #dff0d8;
+    --banner-url-colour: #1976d2;
+
+    --category-list-font-colour: #1976d2;
+
+    --loader-background-colour: var(--secondary-border-colour);
+    --loader-outer-colour: #3498db;
+    --loader-middle-colour: #e74c3c;
+    --loader-inner-colour: #f9c922;
 
 
     /* Operation colours */
@@ -41,7 +52,7 @@
 
     --rec-list-operation-font-colour: #468847;
     --rec-list-operation-bg-colour: #dff0d8;
-    --rec-list-operation-border-colour: #d6e9c6;
+    --rec-list-operation-border-colour: #d3e8c0;
 
     --selected-operation-font-color: #c09853;
     --selected-operation-bg-colour: #fcf8e3;
@@ -65,14 +76,19 @@
 
 
     /* Operation arguments */
-    --arg-title-font-weight: bold;
-    --arg-input-height: 34px;
-    --arg-input-line-height: 20px;
-    --arg-input-font-size: 15px;
+    --op-title-font-weight: bold;
     --arg-font-colour: #424242;
     --arg-background: #fff;
     --arg-border-colour: #ddd;
     --arg-disabled-background: #eee;
+    --arg-label-colour: #388e3c;
+
+
+    /* Operation buttons */
+    --disable-icon-colour: #9e9e9e;
+    --disable-icon-selected-colour: #f44336;
+    --breakpoint-icon-colour: #9e9e9e;
+    --breakpoint-icon-selected-colour: #f44336;
 
 
     /* Buttons */
@@ -94,11 +110,11 @@
 
 
     /* Highlighter colours */
-    --hl1: #fff000;
-    --hl2: #95dfff;
-    --hl3: #ffb6b6;
-    --hl4: #fcf8e3;
-    --hl5: #8de768;
+    --hl1: #ffee00aa;
+    --hl2: #95dfffaa;
+    --hl3: #ffb6b6aa;
+    --hl4: #fcf8e3aa;
+    --hl5: #8de768aa;
 
 
     /* Scrollbar */
@@ -109,8 +125,11 @@
 
     /* Misc. */
     --drop-file-border-colour: #3a87ad;
+    --table-border-colour: #ccc;
     --popover-background: #fff;
     --popover-border-colour: #ccc;
     --code-background: #f9f2f4;
     --code-font-colour: #c7254e;
+    --input-highlight-colour: #1976d2;
+    --input-border-colour: #424242;
 }
